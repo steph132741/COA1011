@@ -1,0 +1,9 @@
+PatientID,TrialCode,DrugCode,Dosage_mg,StartDate,EndDate,Outcome,SideEffects,Analyst
+P4001,TR2025-A,DRG-901,24,2025-07-04,2025-07-18,Improved,None,Dr. Smith
+P4002,TR2025-A,DRG-901,49,2025-07-02,2025-07-16,No Change,"Mild Headache",Dr. Patel
+P4003,TR2025-B,DRG-776,12,2025-07-08,2025-07-23,Worsened,Dizziness,Dr. Khan
+P4004,TR2025-B,DRG-776,15,2025-07-05,2025-07-20,Improved,None,Dr. Lee
+P4005,TR2025-C,DRG-432,7,2025-07-12,2025-07-27,No Change,Fatigue,Dr. Patel
+P4006,TR2025-C,DRG-432,10,2025-07-11,2025-07-26,Improved,None,Dr. Smith
+P4007,TR2025-D,DRG-219,26,2025-07-10,2025-07-25,Worsened,"Nausea;Dizziness",Dr. Lee
+P4008,TR2025-D,DRG-219,24,2025-07-13,2025-07-28,No Change,None,Dr. Khan
