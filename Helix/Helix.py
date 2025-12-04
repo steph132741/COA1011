@@ -1,16 +1,5 @@
-
 """
-clinical_data_processor.py
-
-Single-file completed program:
-- GUI (Tkinter) for FTP / local-file Clinical CSV processing
-- FTP connector (ftplib)
-- CSV validator/processor
-- Test mode and basic unit tests to show TDD approach
-
-Notes:
-- For real FTP usage, provide real host/user/pass
-- Test Mode uses local directory listing & files for easier testing without FTP
+clinical_data_processor.py (modified - short stage logs, no progress bar)
 """
 
 import tkinter as tk
@@ -31,38 +20,16 @@ import sys
 import unittest
 import tempfile
 
-
 COLORS = {
-    'primary': '#8B7355',     
-    'secondary': '#A52A2A',
-    'accent': '#D2691E',
-    'dark_bg': '#2F4F4F',
-    'medium_bg': '#708090',
-    'light_bg': '#F5F5F5',
-    'card_bg': '#FFFFFF',
-    'text_dark': '#2F4F4F',
-    'text_light': '#FFFFFF',
-    'text_muted': '#696969',
-    'success': '#228B22',
-    'warning': '#FF8C00',
-    'error': '#DC143C',
-    'border': '#C0C0C0',
-    # Button colors (distinct)
-    'btn_connect': '#27AE60',     
-    'btn_disconnect': '#E74C3C',   
-    'btn_validate': '#3498DB',     
-    'btn_process': '#9B59B6',      
-    'btn_search': '#16A085',       
-    'btn_refresh': '#F39C12',     
-    'btn_browse': '#95A5A6',       
-    'btn_utility': '#34495E',     
-    'btn_disabled': '#BDC3C7',
+    'primary': '#8B7355','secondary': '#A52A2A','accent': '#D2691E','dark_bg': '#2F4F4F',
+    'medium_bg': '#708090','light_bg': '#F5F5F5','card_bg': '#FFFFFF','text_dark': '#2F4F4F',
+    'text_light': '#FFFFFF','text_muted': '#696969','success': '#228B22','warning': '#FF8C00',
+    'error': '#DC143C','border': '#C0C0C0','btn_connect': '#27AE60','btn_disconnect': '#E74C3C',
+    'btn_validate': '#3498DB','btn_process': '#9B59B6','btn_search': '#16A085','btn_refresh': '#F39C12',
+    'btn_browse': '#95A5A6','btn_utility': '#34495E','btn_disabled': '#BDC3C7',
 }
 
-
 class ClinicalDataProcessor:
-    """Handles FTP connection and file operations"""
-
     def __init__(self, ftp_host, ftp_user, ftp_pass, remote_dir=""):
         self.ftp_host = ftp_host
         self.ftp_user = ftp_user
@@ -72,27 +39,22 @@ class ClinicalDataProcessor:
         self.connected = False
 
     def connect(self, status_queue=None, passive=True, timeout=30):
-        """Connect to FTP server with passive mode"""
         try:
-            # If an existing FTP instance exists, try to close it first
             if self.ftp:
                 try:
                     self.ftp.quit()
                 except Exception:
                     pass
-
             self.ftp = ftplib.FTP(timeout=timeout)
             self.ftp.connect(self.ftp_host)
             self.ftp.set_pasv(passive)
             self.ftp.login(self.ftp_user, self.ftp_pass)
-
             if self.remote_dir:
                 try:
                     self.ftp.cwd(self.remote_dir)
                 except Exception as e:
                     if status_queue:
                         status_queue.put((f"Warning: Could not change to remote dir '{self.remote_dir}': {e}", "warning"))
-
             self.connected = True
             if status_queue:
                 status_queue.put(("✅ FTP connection successful", "success"))
@@ -108,7 +70,6 @@ class ClinicalDataProcessor:
             return False
 
     def disconnect(self):
-        """Safely disconnect from FTP"""
         if self.ftp:
             try:
                 self.ftp.quit()
@@ -121,15 +82,14 @@ class ClinicalDataProcessor:
         self.ftp = None
 
     def get_file_list(self, status_queue=None):
-        """Get list of CSV files from server (or raise)"""
         if not self.ftp or not self.connected:
             if status_queue:
                 status_queue.put(("Not connected to FTP server", "error"))
             return []
-
         try:
             files = self.ftp.nlst()
-            csv_files = [f for f in files if f.upper().endswith('.CSV')]
+            # simple CSV detection; keep case-insensitive
+            csv_files = [f for f in files if re.search(r'\.csv$', f, re.IGNORECASE)]
             if status_queue and csv_files:
                 status_queue.put((f"Found {len(csv_files)} CSV files", "success"))
             elif status_queue:
@@ -140,26 +100,16 @@ class ClinicalDataProcessor:
                 status_queue.put((f"Failed to retrieve file list: {e}", "error"))
             return []
 
-# ClinicalDataValidator
-
 class ClinicalDataValidator:
-    """
-    Handles file validation & processing.
-    Designed for testability: small discrete functions that can be unit tested.
-    """
-
     def __init__(self, download_dir, archive_dir, error_dir):
         self.download_dir = Path(download_dir)
         self.archive_dir = Path(archive_dir)
         self.error_dir = Path(error_dir)
-
         for directory in [self.download_dir, self.archive_dir, self.error_dir]:
             directory.mkdir(parents=True, exist_ok=True)
-
         self.processed_files_log = self.download_dir / "processed_files.txt"
         self.processed_files = self._load_processed_files()
 
-    #processed files bookkeeping
     def _load_processed_files(self):
         if self.processed_files_log.exists():
             return set(self.processed_files_log.read_text().splitlines())
@@ -181,12 +131,7 @@ class ClinicalDataValidator:
             f.write(log_entry)
         return guid, log_entry
 
-    #filename pattern
     def _validate_filename_pattern(self, filename, status_queue=None):
-        """
-        Pattern: CLINICALDATAYYYYMMDDHHMMSS.CSV
-        (14 digits after CLINICALDATA)
-        """
         pattern = r'^CLINICALDATA\d{14}\.CSV$'
         is_valid = re.match(pattern, filename, re.IGNORECASE) is not None
         if status_queue:
@@ -196,17 +141,10 @@ class ClinicalDataValidator:
                 status_queue.put((f"  ✗ Invalid pattern (expected CLINICALDATAYYYYMMDDHHMMSS.CSV)", "error"))
         return is_valid
 
-    # CSV content validation 
-    def _validate_csv_content(self, file_path, status_queue=None):
+    def _validate_csv_content(self, file_path, status_queue=None, progress_callback=None):
         """
-        Validates CSV file content per rules described in the assignment:
-        - Must have header with specific fields
-        - Must have 9 columns per row
-        - Dosage positive integer
-        - Dates in YYYY-MM-DD and EndDate >= StartDate
-        - Outcome in allowed list
-        - No duplicate patient/trial/drug combos
         Returns: (is_valid: bool, errors: [str], valid_count: int)
+        Uses short stage-based logs instead of progress percentages.
         """
         errors = []
         valid_records = []
@@ -218,15 +156,7 @@ class ClinicalDataValidator:
         try:
             # Accept paths or file-like object
             if isinstance(file_path, (str, Path)):
-                fobj = open(file_path, 'r', newline='', encoding='utf-8')
-                close_after = True
-            else:
-                # file-like object
-                fobj = file_path
-                close_after = False
-
-            try:
-                with fobj:
+                with open(file_path, 'r', newline='', encoding='utf-8') as fobj:
                     reader = csv.reader(fobj)
                     try:
                         header = next(reader)
@@ -237,6 +167,9 @@ class ClinicalDataValidator:
 
                     expected_fields = ["PatientID", "TrialCode", "DrugCode", "Dosage_mg",
                                        "StartDate", "EndDate", "Outcome", "SideEffects", "Analyst"]
+                    # Stage: Checking header
+                    if status_queue:
+                        status_queue.put(("→ Checking header...", "info"))
                     if header != expected_fields:
                         errors.append(f"Invalid header. Expected fields: {expected_fields}")
                         if status_queue:
@@ -246,6 +179,17 @@ class ClinicalDataValidator:
                         if status_queue:
                             status_queue.put((f"  ✓ Header valid ({len(header)} fields)", "success"))
 
+                    # Stage: Validating rows
+                    if status_queue:
+                        status_queue.put(("→ Validating rows...", "info"))
+
+                    rows = list(reader)
+                    total_rows = len(rows)
+                    if total_rows == 0:
+                        if status_queue:
+                            status_queue.put((f"  ✗ No data rows found", "error"))
+                        return False, ["No data rows"], 0
+
                     row_num = 1
                     error_counts = {
                         'field_count': 0, 'missing_fields': 0, 'dosage': 0,
@@ -253,10 +197,9 @@ class ClinicalDataValidator:
                         'duplicate': 0
                     }
 
-                    for row in reader:
+                    for idx, row in enumerate(rows, start=1):
                         row_num += 1
                         record_errors = []
-
                         if len(row) != 9:
                             error_counts['field_count'] += 1
                             errors.append(f"Row {row_num}: Expected 9 fields, got {len(row)}")
@@ -270,7 +213,6 @@ class ClinicalDataValidator:
                             error_counts['missing_fields'] += 1
                             record_errors.append("Missing required fields")
 
-                        # Dosage check
                         try:
                             dosage_val = int(dosage)
                             if dosage_val <= 0:
@@ -280,7 +222,6 @@ class ClinicalDataValidator:
                             error_counts['dosage'] += 1
                             record_errors.append(f"Non-numeric dosage: '{dosage}'")
 
-                        # Date parse and range
                         try:
                             sd = datetime.strptime(start_date, "%Y-%m-%d")
                             ed = datetime.strptime(end_date, "%Y-%m-%d")
@@ -291,7 +232,6 @@ class ClinicalDataValidator:
                             error_counts['date_format'] += 1
                             record_errors.append("Invalid date format (expected YYYY-MM-DD)")
 
-                        # Outcome allowed values
                         if outcome not in ["Improved", "No Change", "Worsened"]:
                             error_counts['outcome'] += 1
                             record_errors.append(f"Invalid outcome '{outcome}'")
@@ -308,10 +248,14 @@ class ClinicalDataValidator:
                         else:
                             valid_records.append(row)
 
+                    # Stage: Checking duplicates (summary stage)
+                    if status_queue:
+                        status_queue.put(("→ Checking duplicates...", "info"))
+
+                    # Final summary messages
                     if status_queue:
                         status_queue.put((f"  → Scanned {row_num - 1} rows", "info"))
                         status_queue.put((f"  → Valid records: {len(valid_records)}", "success"))
-
                         if error_counts['dosage'] > 0:
                             status_queue.put((f"    • Dosage errors: {error_counts['dosage']}", "error"))
                         if error_counts['date_range'] > 0:
@@ -325,94 +269,185 @@ class ClinicalDataValidator:
                         if error_counts['missing_fields'] > 0:
                             status_queue.put((f"    • Missing fields: {error_counts['missing_fields']}", "error"))
 
+                    # Stage: Finalizing
+                    if status_queue:
+                        status_queue.put(("→ Finalizing...", "info"))
+
                     if errors:
                         return False, errors, len(valid_records)
                     return True, [], len(valid_records)
-            finally:
-                if close_after:
+
+            else:
+                # file-like object branch
+                fobj = file_path
+                reader = csv.reader(fobj)
+                try:
+                    header = next(reader)
+                except StopIteration:
+                    if status_queue:
+                        status_queue.put((f"  ✗ File is empty", "error"))
+                    return False, ["File is empty"], 0
+
+                expected_fields = ["PatientID", "TrialCode", "DrugCode", "Dosage_mg",
+                                   "StartDate", "EndDate", "Outcome", "SideEffects", "Analyst"]
+                if status_queue:
+                    status_queue.put(("→ Checking header...", "info"))
+                if header != expected_fields:
+                    errors.append(f"Invalid header. Expected fields: {expected_fields}")
+                    if status_queue:
+                        status_queue.put((f"  ✗ Header mismatch", "error"))
+                    return False, errors, 0
+                else:
+                    if status_queue:
+                        status_queue.put((f"  ✓ Header valid ({len(header)} fields)", "success"))
+
+                if status_queue:
+                    status_queue.put(("→ Validating rows...", "info"))
+
+                rows = list(reader)
+                total_rows = len(rows)
+                if total_rows == 0:
+                    if status_queue:
+                        status_queue.put((f"  ✗ No data rows found", "error"))
+                    return False, ["No data rows"], 0
+
+                row_num = 1
+                error_counts = {
+                    'field_count': 0, 'missing_fields': 0, 'dosage': 0,
+                    'date_range': 0, 'date_format': 0, 'outcome': 0,
+                    'duplicate': 0
+                }
+                for idx, row in enumerate(rows, start=1):
+                    row_num += 1
+                    record_errors = []
+
+                    if len(row) != 9:
+                        error_counts['field_count'] += 1
+                        errors.append(f"Row {row_num}: Expected 9 fields, got {len(row)}")
+                        continue
+
+                    (patient_id, trial_code, drug_code, dosage,
+                     start_date, end_date, outcome, side_effects, analyst) = row
+
+                    if not all([patient_id, trial_code, drug_code, dosage,
+                                start_date, end_date, outcome, side_effects, analyst]):
+                        error_counts['missing_fields'] += 1
+                        record_errors.append("Missing required fields")
+
                     try:
-                        fobj.close()
+                        dosage_val = int(dosage)
+                        if dosage_val <= 0:
+                            error_counts['dosage'] += 1
+                            record_errors.append(f"Dosage must be positive integer, got '{dosage}'")
                     except Exception:
-                        pass
+                        error_counts['dosage'] += 1
+                        record_errors.append(f"Non-numeric dosage: '{dosage}'")
+
+                    try:
+                        sd = datetime.strptime(start_date, "%Y-%m-%d")
+                        ed = datetime.strptime(end_date, "%Y-%m-%d")
+                        if ed < sd:
+                            error_counts['date_range'] += 1
+                            record_errors.append(f"EndDate ({end_date}) before StartDate ({start_date})")
+                    except Exception:
+                        error_counts['date_format'] += 1
+                        record_errors.append("Invalid date format (expected YYYY-MM-DD)")
+
+                    if outcome not in ["Improved", "No Change", "Worsened"]:
+                        error_counts['outcome'] += 1
+                        record_errors.append(f"Invalid outcome '{outcome}'")
+
+                    key = f"{patient_id}_{trial_code}_{drug_code}"
+                    if key in seen_records:
+                        error_counts['duplicate'] += 1
+                        record_errors.append("Duplicate record")
+                    else:
+                        seen_records.add(key)
+
+                    if record_errors:
+                        errors.append(f"Row {row_num}: {'; '.join(record_errors)}")
+                    else:
+                        valid_records.append(row)
+
+                if status_queue:
+                    status_queue.put(("→ Checking duplicates...", "info"))
+                    status_queue.put((f"  → Scanned {row_num - 1} rows", "info"))
+                    status_queue.put((f"  → Valid records: {len(valid_records)}", "success"))
+                    if error_counts['dosage'] > 0:
+                        status_queue.put((f"    • Dosage errors: {error_counts['dosage']}", "error"))
+                    if error_counts['date_range'] > 0:
+                        status_queue.put((f"    • Date range errors: {error_counts['date_range']}", "error"))
+                    if error_counts['date_format'] > 0:
+                        status_queue.put((f"    • Date format errors: {error_counts['date_format']}", "error"))
+                    if error_counts['outcome'] > 0:
+                        status_queue.put((f"    • Outcome errors: {error_counts['outcome']}", "error"))
+                    if error_counts['duplicate'] > 0:
+                        status_queue.put((f"    • Duplicates: {error_counts['duplicate']}", "error"))
+                    if error_counts['missing_fields'] > 0:
+                        status_queue.put((f"    • Missing fields: {error_counts['missing_fields']}", "error"))
+                    status_queue.put(("→ Finalizing...", "info"))
+
+                if errors:
+                    return False, errors, len(valid_records)
+                return True, [], len(valid_records)
 
         except UnicodeDecodeError:
+            if status_queue:
+                status_queue.put((f"  ✗ File is not valid UTF-8 encoded CSV", "error"))
             return False, ["File is not valid UTF-8 encoded CSV"], 0
         except Exception as e:
+            if status_queue:
+                status_queue.put((f"  ✗ File read error: {str(e)}", "error"))
             return False, [f"File read error: {str(e)}"], 0
 
-    #high-level operations for GUI 
     def validate_selected_files(self, ftp_obj, files, status_queue):
-        """Validate specific files without archiving. ftp_obj may be either ftplib.FTP or a local 'fake' object that implements retrbinary"""
         valid_count = 0
         invalid_count = 0
-
         for filename in files:
             if filename in self.processed_files:
                 status_queue.put((f"\n⏭️ Skipping: {filename} (already processed)", "warning"))
                 continue
-
             status_queue.put((f"\n{'='*60}", "info"))
             status_queue.put((f"🔍 Validating: {filename}", "info"))
-
             temp_path = self.download_dir / f"temp_validate_{filename}"
             try:
-                # Download into temp file using ftp_obj.retrbinary if present, otherwise treat ftp_obj as a local root path
-                if hasattr(ftp_obj, "retrbinary"):
-                    with open(temp_path, 'wb') as f:
-                        ftp_obj.retrbinary(f'RETR {filename}', f.write)
-                else:
-                    # ftp_obj is a Path-like root directory
-                    source = Path(ftp_obj) / filename
-                    shutil.copy2(source, temp_path)
-
+                with open(temp_path, 'wb') as f:
+                    ftp_obj.retrbinary(f'RETR {filename}', f.write)
                 if self._validate_filename_pattern(filename, status_queue):
-                    is_valid, errors, record_count = self._validate_csv_content(temp_path, status_queue)
-
+                    is_valid, errors, record_count = self._validate_csv_content(
+                        temp_path, status_queue=status_queue, progress_callback=None
+                    )
                     if is_valid:
                         status_queue.put((f"✅ VALID: {filename} ({record_count} records)", "success"))
                         valid_count += 1
                     else:
                         status_queue.put((f"❌ INVALID: {filename} ({len(errors)} errors)", "error"))
                         invalid_count += 1
-
-                temp_path.unlink()
+                if temp_path.exists():
+                    temp_path.unlink()
             except Exception as e:
                 status_queue.put((f"❌ Error validating {filename}: {e}", "error"))
                 invalid_count += 1
                 if temp_path.exists():
                     temp_path.unlink()
-
             status_queue.put(("\n" + "="*60, "info"))
-
         status_queue.put(("✅ Validation complete!", "complete"))
         status_queue.put((f"📊 Results: {valid_count} valid, {invalid_count} invalid", "summary"))
 
     def process_selected_files(self, ftp_obj, files, status_queue):
-        """Download, validate and archive or move to error folder"""
         processed_count = 0
         error_count = 0
-
         for filename in files:
             if filename in self.processed_files:
                 status_queue.put((f"\n⏭️ Skipping: {filename} (already processed)", "warning"))
                 continue
-
             status_queue.put((f"\n{'='*60}", "info"))
             status_queue.put((f"Processing: {filename}", "info"))
-
             local_path = self.download_dir / filename
             try:
-                # Download
-                if hasattr(ftp_obj, "retrbinary"):
-                    with open(local_path, 'wb') as f:
-                        ftp_obj.retrbinary(f'RETR {filename}', f.write)
-                else:
-                    source = Path(ftp_obj) / filename
-                    shutil.copy2(source, local_path)
-
+                with open(local_path, 'wb') as f:
+                    ftp_obj.retrbinary(f'RETR {filename}', f.write)
                 status_queue.put((f"  📥 Downloaded successfully", "success"))
-
-                # Validate filename pattern
                 if not self._validate_filename_pattern(filename, status_queue):
                     error_file = self.error_dir / filename
                     shutil.move(str(local_path), str(error_file))
@@ -420,15 +455,13 @@ class ClinicalDataValidator:
                     status_queue.put((f"  ❌ Rejected - Invalid pattern (GUID: {guid})", "error"))
                     error_count += 1
                     continue
-
-                # Validate content
-                is_valid, errors, record_count = self._validate_csv_content(local_path, status_queue)
-
+                is_valid, errors, record_count = self._validate_csv_content(
+                    local_path, status_queue=status_queue, progress_callback=None
+                )
                 if is_valid:
-                    # Archive valid file with date suffix
                     try:
                         current_date = datetime.now().strftime("%Y%m%d")
-                        base_name = filename[:-4]  # strip .CSV
+                        base_name = filename[:-4]
                         archive_filename = f"{base_name}_{current_date}.CSV"
                         archive_path = self.archive_dir / archive_filename
                         shutil.move(str(local_path), str(archive_path))
@@ -442,7 +475,6 @@ class ClinicalDataValidator:
                         if local_path.exists():
                             local_path.unlink()
                 else:
-                    # Move invalid file to error directory
                     error_file = self.error_dir / filename
                     shutil.move(str(local_path), str(error_file))
                     summary = " | ".join(errors[:3])
@@ -453,48 +485,32 @@ class ClinicalDataValidator:
                     for error in errors[:3]:
                         status_queue.put((f"    • {error}", "error"))
                     error_count += 1
-
             except Exception as e:
                 status_queue.put((f"  ❌ Fatal error: {e}", "error"))
                 error_count += 1
                 if local_path.exists():
                     local_path.unlink()
-
             status_queue.put(("\n" + "="*60, "info"))
-
         status_queue.put(("✅ Processing complete!", "complete"))
         status_queue.put((f"📊 Summary: {processed_count} archived, {error_count} rejected", "summary"))
 
-
-# ClinicalDataGUI (Tkinter)
-
 class ClinicalDataGUI:
-    """Main GUI application with vibrant colored buttons"""
-
     def __init__(self, root):
         self.root = root
         self.root.title("HelixSoft Clinical Data Processor")
         self.root.geometry("1100x800")
         self.root.configure(bg=COLORS['light_bg'])
-
-        # Styles
         self.style = ttk.Style()
-        # Some platforms require 'clam' theme for ttk background changes
         try:
             self.style.theme_use('clam')
         except Exception:
             pass
         self.configure_styles()
-
-        # Core components
         self.processor = None
         self.validator = None
         self.is_processing = False
-
         self.all_files = []
         self.displayed_files = []
-
-        # Default variables
         home = Path.home()
         self.ftp_host = tk.StringVar(value="localhost")
         self.ftp_user = tk.StringVar(value="anonymous")
@@ -504,66 +520,22 @@ class ClinicalDataGUI:
         self.archive_dir = tk.StringVar(value=str(home / "ClinicalData" / "Archive"))
         self.error_dir = tk.StringVar(value=str(home / "ClinicalData" / "Errors"))
         self.search_var = tk.StringVar()
-        self.test_mode = tk.BooleanVar(value=True)  # default to test mode (local)
-
-        # Setup directories
         self.setup_directories()
-
-        # Build UI
         self.create_widgets()
-
-        # Queue for background tasks
         self.status_queue = queue.Queue()
         self.root.after(100, self.check_queue)
 
     def configure_styles(self):
         s = self.style
-
         s.configure('Modern.TFrame', background=COLORS['light_bg'])
         s.configure('Card.TFrame', background=COLORS['card_bg'], relief='raised', borderwidth=1)
-
-        s.configure('Header.TLabel',
-                    font=('Segoe UI', 16, 'bold'),
-                    background=COLORS['light_bg'],
-                    foreground=COLORS['dark_bg'])
-        s.configure('Subheader.TLabel',
-                    font=('Segoe UI', 10, 'bold'),
-                    background=COLORS['light_bg'],
-                    foreground=COLORS['text_dark'])
-
-        # button styles
-        btn_map = {
-            'Connect': COLORS['btn_connect'],
-            'Disconnect': COLORS['btn_disconnect'],
-            'Validate': COLORS['btn_validate'],
-            'Process': COLORS['btn_process'],
-            'Search': COLORS['btn_search'],
-            'Refresh': COLORS['btn_refresh'],
-            'Browse': COLORS['btn_browse'],
-            'Utility': COLORS['btn_utility'],
-        }
+        s.configure('Header.TLabel', font=('Segoe UI', 16, 'bold'), background=COLORS['light_bg'], foreground=COLORS['dark_bg'])
+        s.configure('Subheader.TLabel', font=('Segoe UI', 10, 'bold'), background=COLORS['light_bg'], foreground=COLORS['text_dark'])
+        btn_map = {'Connect': COLORS['btn_connect'],'Disconnect': COLORS['btn_disconnect'],'Validate': COLORS['btn_validate'],'Process': COLORS['btn_process'],'Search': COLORS['btn_search'],'Refresh': COLORS['btn_refresh'],'Browse': COLORS['btn_browse'],'Utility': COLORS['btn_utility'],}
         for name, bg in btn_map.items():
-            s.configure(f'{name}.TButton',
-                        padding=(8, 6),
-                        font=('Segoe UI', 9, 'bold'),
-                        background=bg,
-                        foreground=COLORS['text_light'],
-                        relief='raised',
-                        borderwidth=1)
-            # Map disabled state color
-            s.map(f'{name}.TButton',
-                  background=[('disabled', COLORS['btn_disabled'])],
-                  relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
-
-        s.configure('Modern.TEntry',
-                    padding=(6, 6),
-                    font=('Segoe UI', 10),
-                    fieldbackground=COLORS['card_bg'])
-
-        s.configure('Modern.Horizontal.TProgressbar',
-                    background=COLORS['btn_process'],
-                    troughcolor=COLORS['light_bg'],
-                    borderwidth=0)
+            s.configure(f'{name}.TButton', padding=(8, 6), font=('Segoe UI', 9, 'bold'), background=bg, foreground=COLORS['text_light'], relief='raised', borderwidth=1)
+            s.map(f'{name}.TButton', background=[('disabled', COLORS['btn_disabled'])], relief=[('pressed', 'sunken'), ('!pressed', 'raised')])
+        s.configure('Modern.TEntry', padding=(6, 6), font=('Segoe UI', 10), fieldbackground=COLORS['card_bg'])
 
     def setup_directories(self):
         for var in [self.download_dir, self.archive_dir, self.error_dir]:
@@ -572,135 +544,69 @@ class ClinicalDataGUI:
     def create_widgets(self):
         main_container = ttk.Frame(self.root, style='Modern.TFrame')
         main_container.pack(fill=tk.BOTH, expand=True, padx=16, pady=16)
-
-        # Header
         header_frame = ttk.Frame(main_container, style='Modern.TFrame')
         header_frame.pack(fill=tk.X, pady=(0, 12))
         ttk.Label(header_frame, text="🧬 HELIXSOFT CLINICAL DATA PROCESSOR", style='Header.TLabel').pack(side=tk.LEFT)
-
-        # Connection status
-        self.status_label = ttk.Label(header_frame, text="● DISCONNECTED",
-                                      foreground=COLORS['error'],
-                                      font=('Segoe UI', 10, 'bold'),
-                                      background=COLORS['light_bg'])
+        self.status_label = ttk.Label(header_frame, text="● DISCONNECTED", foreground=COLORS['error'], font=('Segoe UI', 10, 'bold'), background=COLORS['light_bg'])
         self.status_label.pack(side=tk.RIGHT)
-
         content_frame = ttk.Frame(main_container, style='Modern.TFrame')
         content_frame.pack(fill=tk.BOTH, expand=True)
-
         left_panel = ttk.Frame(content_frame, style='Modern.TFrame')
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 12))
-
         right_panel = ttk.Frame(content_frame, style='Modern.TFrame')
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(12, 0))
 
-        # FTP Card
         ftp_card = ttk.LabelFrame(left_panel, text="🔌 FTP CONNECTION", style='Modern.TFrame', padding=12)
         ftp_card.pack(fill=tk.X, pady=(0, 12))
-
-        form_frame = ttk.Frame(ftp_card, style='Modern.TFrame')
-        form_frame.pack(fill=tk.X)
-
-        # Host
-        host_frame = ttk.Frame(form_frame, style='Modern.TFrame')
-        host_frame.pack(fill=tk.X, pady=4)
+        form_frame = ttk.Frame(ftp_card, style='Modern.TFrame'); form_frame.pack(fill=tk.X)
+        host_frame = ttk.Frame(form_frame, style='Modern.TFrame'); host_frame.pack(fill=tk.X, pady=4)
         ttk.Label(host_frame, text="Host:", style='Subheader.TLabel', width=12).pack(side=tk.LEFT)
         ttk.Entry(host_frame, textvariable=self.ftp_host, style='Modern.TEntry', width=28).pack(side=tk.LEFT, fill=tk.X, padx=(6, 0))
-
-        # Username
-        user_frame = ttk.Frame(form_frame, style='Modern.TFrame')
-        user_frame.pack(fill=tk.X, pady=4)
+        user_frame = ttk.Frame(form_frame, style='Modern.TFrame'); user_frame.pack(fill=tk.X, pady=4)
         ttk.Label(user_frame, text="Username:", style='Subheader.TLabel', width=12).pack(side=tk.LEFT)
         ttk.Entry(user_frame, textvariable=self.ftp_user, style='Modern.TEntry', width=28).pack(side=tk.LEFT, fill=tk.X, padx=(6, 0))
-
-        # Password
-        pass_frame = ttk.Frame(form_frame, style='Modern.TFrame')
-        pass_frame.pack(fill=tk.X, pady=4)
+        pass_frame = ttk.Frame(form_frame, style='Modern.TFrame'); pass_frame.pack(fill=tk.X, pady=4)
         ttk.Label(pass_frame, text="Password:", style='Subheader.TLabel', width=12).pack(side=tk.LEFT)
         ttk.Entry(pass_frame, textvariable=self.ftp_pass, show="*", style='Modern.TEntry', width=28).pack(side=tk.LEFT, fill=tk.X, padx=(6, 0))
+        conn_btn_frame = ttk.Frame(ftp_card, style='Modern.TFrame'); conn_btn_frame.pack(fill=tk.X, pady=(8, 0))
+        self.connect_btn = ttk.Button(conn_btn_frame, text="🔌 CONNECT", command=self.connect_to_server, style='Connect.TButton'); self.connect_btn.pack(side=tk.LEFT, padx=(0, 8))
+        self.disconnect_btn = ttk.Button(conn_btn_frame, text="❌ DISCONNECT", command=self.disconnect_from_server, style='Disconnect.TButton', state=tk.DISABLED); self.disconnect_btn.pack(side=tk.LEFT)
 
-        # Test mode toggle
-        tm_frame = ttk.Frame(form_frame, style='Modern.TFrame')
-        tm_frame.pack(fill=tk.X, pady=4)
-        ttk.Checkbutton(tm_frame, text="Use Test Mode (local files)", variable=self.test_mode).pack(side=tk.LEFT, padx=(12, 0))
-
-        # Connection buttons
-        conn_btn_frame = ttk.Frame(ftp_card, style='Modern.TFrame')
-        conn_btn_frame.pack(fill=tk.X, pady=(8, 0))
-        self.connect_btn = ttk.Button(conn_btn_frame, text="🔌 CONNECT", command=self.connect_to_server, style='Connect.TButton')
-        self.connect_btn.pack(side=tk.LEFT, padx=(0, 8))
-        self.disconnect_btn = ttk.Button(conn_btn_frame, text="❌ DISCONNECT", command=self.disconnect_from_server, style='Disconnect.TButton', state=tk.DISABLED)
-        self.disconnect_btn.pack(side=tk.LEFT)
-
-        # File Card
-        file_card = ttk.LabelFrame(left_panel, text="📁 SERVER FILES", style='Modern.TFrame', padding=12)
-        file_card.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
-
-        # Search controls
-        controls_frame = ttk.Frame(file_card, style='Modern.TFrame')
-        controls_frame.pack(fill=tk.X, pady=(0, 8))
+        file_card = ttk.LabelFrame(left_panel, text="📁 SERVER FILES", style='Modern.TFrame', padding=12); file_card.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
+        controls_frame = ttk.Frame(file_card, style='Modern.TFrame'); controls_frame.pack(fill=tk.X, pady=(0, 8))
         ttk.Label(controls_frame, text="Search:", style='Subheader.TLabel').pack(side=tk.LEFT)
-        self.search_entry = ttk.Entry(controls_frame, textvariable=self.search_var, style='Modern.TEntry', width=28)
-        self.search_entry.pack(side=tk.LEFT, padx=(6, 6), fill=tk.X, expand=True)
+        self.search_entry = ttk.Entry(controls_frame, textvariable=self.search_var, style='Modern.TEntry', width=28); self.search_entry.pack(side=tk.LEFT, padx=(6, 6), fill=tk.X, expand=True)
         self.search_entry.bind('<KeyRelease>', self.filter_file_list)
         ttk.Button(controls_frame, text="🔍 SEARCH", command=self.filter_file_list, style='Search.TButton').pack(side=tk.LEFT, padx=(6, 6))
         ttk.Button(controls_frame, text="🔄 REFRESH", command=self.refresh_file_list, style='Refresh.TButton').pack(side=tk.RIGHT)
 
-        # File list with scrollbar
-        list_container = ttk.Frame(file_card, style='Modern.TFrame')
-        list_container.pack(fill=tk.BOTH, expand=True)
-        scrollbar = ttk.Scrollbar(list_container)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        self.file_listbox = Listbox(list_container, selectmode=SINGLE, yscrollcommand=scrollbar.set,
-                                    height=12, width=48, font=('Segoe UI', 10),
-                                    bg=COLORS['card_bg'], relief='flat', highlightthickness=1,
-                                    selectbackground=COLORS['btn_validate'], selectforeground=COLORS['text_light'])
+        list_container = ttk.Frame(file_card, style='Modern.TFrame'); list_container.pack(fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(list_container); scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.file_listbox = Listbox(list_container, selectmode=SINGLE, yscrollcommand=scrollbar.set, height=12, width=48, font=('Segoe UI', 10), bg=COLORS['card_bg'], relief='flat', highlightthickness=1, selectbackground=COLORS['btn_validate'], selectforeground=COLORS['text_light'])
         self.file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.file_listbox.yview)
         self.file_listbox.bind('<<ListboxSelect>>', self.on_file_selection_change)
 
-        # Actions
-        action_card = ttk.LabelFrame(left_panel, text="⚡ ACTIONS", style='Modern.TFrame', padding=12)
-        action_card.pack(fill=tk.X)
-        action_btn_frame = ttk.Frame(action_card, style='Modern.TFrame')
-        action_btn_frame.pack(fill=tk.X)
+        action_card = ttk.LabelFrame(left_panel, text="⚡ ACTIONS", style='Modern.TFrame', padding=12); action_card.pack(fill=tk.X)
+        action_btn_frame = ttk.Frame(action_card, style='Modern.TFrame'); action_btn_frame.pack(fill=tk.X)
+        self.validate_btn = ttk.Button(action_btn_frame, text="🔍 VALIDATE SELECTED FILE", command=self.validate_selected, style='Validate.TButton', state=tk.DISABLED); self.validate_btn.pack(side=tk.LEFT, padx=(0, 8))
+        self.process_btn = ttk.Button(action_btn_frame, text="🚀 PROCESS SELECTED FILE", command=self.process_selected, style='Process.TButton', state=tk.DISABLED); self.process_btn.pack(side=tk.LEFT)
 
-        self.validate_btn = ttk.Button(action_btn_frame, text="🔍 VALIDATE SELECTED FILE", command=self.validate_selected, style='Validate.TButton', state=tk.DISABLED)
-        self.validate_btn.pack(side=tk.LEFT, padx=(0, 8))
-        self.process_btn = ttk.Button(action_btn_frame, text="🚀 PROCESS SELECTED FILE", command=self.process_selected, style='Process.TButton', state=tk.DISABLED)
-        self.process_btn.pack(side=tk.LEFT)
-
-        # Right panel: directories and log
-        dir_card = ttk.LabelFrame(right_panel, text="📂 LOCAL DIRECTORIES", style='Modern.TFrame', padding=12)
-        dir_card.pack(fill=tk.X, pady=(0, 12))
-        directories = [
-            ("📥 Download:", self.download_dir),
-            ("📦 Archive:", self.archive_dir),
-            ("❌ Errors:", self.error_dir)
-        ]
+        dir_card = ttk.LabelFrame(right_panel, text="📂 LOCAL DIRECTORIES", style='Modern.TFrame', padding=12); dir_card.pack(fill=tk.X, pady=(0, 12))
+        directories = [("📥 Download:", self.download_dir),("📦 Archive:", self.archive_dir),("❌ Errors:", self.error_dir)]
         for i, (label, var) in enumerate(directories):
-            row_frame = ttk.Frame(dir_card, style='Modern.TFrame')
-            row_frame.pack(fill=tk.X, pady=6)
+            row_frame = ttk.Frame(dir_card, style='Modern.TFrame'); row_frame.pack(fill=tk.X, pady=6)
             ttk.Label(row_frame, text=label, style='Subheader.TLabel', width=12).pack(side=tk.LEFT)
-            entry = ttk.Entry(row_frame, textvariable=var, style='Modern.TEntry')
-            entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 6))
+            entry = ttk.Entry(row_frame, textvariable=var, style='Modern.TEntry'); entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 6))
             ttk.Button(row_frame, text="📁", command=lambda v=var: self.browse_directory(v), style='Browse.TButton', width=4).pack(side=tk.RIGHT)
 
-        util_frame = ttk.Frame(dir_card, style='Modern.TFrame')
-        util_frame.pack(fill=tk.X, pady=(10, 0))
+        util_frame = ttk.Frame(dir_card, style='Modern.TFrame'); util_frame.pack(fill=tk.X, pady=(10, 0))
         ttk.Button(util_frame, text="📋 OPEN ERROR LOG", command=self.open_error_log, style='Utility.TButton').pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(util_frame, text="🗑️ CLEAR LOG", command=self.clear_log, style='Utility.TButton').pack(side=tk.LEFT)
 
-        # Log Card
-        log_card = ttk.LabelFrame(right_panel, text="📝 PROCESSING LOG", style='Modern.TFrame', padding=12)
-        log_card.pack(fill=tk.BOTH, expand=True)
-        self.log_text = scrolledtext.ScrolledText(log_card, height=20, width=65, wrap=tk.WORD,
-                                                  font=('Consolas', 9), bg=COLORS['card_bg'],
-                                                  relief='flat', padx=10, pady=10)
+        log_card = ttk.LabelFrame(right_panel, text="📝 PROCESSING LOG", style='Modern.TFrame', padding=12); log_card.pack(fill=tk.BOTH, expand=True)
+        self.log_text = scrolledtext.ScrolledText(log_card, height=20, width=65, wrap=tk.WORD, font=('Consolas', 9), bg=COLORS['card_bg'], relief='flat', padx=10, pady=10)
         self.log_text.pack(fill=tk.BOTH, expand=True)
-
-        # Log tags
         self.log_text.tag_configure("info", foreground=COLORS['dark_bg'], font=('Consolas', 9))
         self.log_text.tag_configure("success", foreground=COLORS['success'], font=('Consolas', 9))
         self.log_text.tag_configure("warning", foreground=COLORS['warning'], font=('Consolas', 9))
@@ -708,13 +614,8 @@ class ClinicalDataGUI:
         self.log_text.tag_configure("complete", foreground=COLORS['primary'], font=('Consolas', 10, 'bold'))
         self.log_text.tag_configure("summary", foreground=COLORS['secondary'], font=('Consolas', 10, 'bold'))
 
-        # Progress bar
-        self.progress = ttk.Progressbar(right_panel, mode='indeterminate', style='Modern.Horizontal.TProgressbar')
-        self.progress.pack(fill=tk.X, pady=(10, 0))
+        # Note: Progress bar removed (short stage-based logs will be used instead)
 
-    # -----------------------
-    # Helper methods
-    # -----------------------
     def browse_directory(self, var):
         path = filedialog.askdirectory()
         if path:
@@ -726,30 +627,24 @@ class ClinicalDataGUI:
             self.log_text.insert(tk.END, f"[{timestamp}] {message}\n", tag)
             self.log_text.see(tk.END)
         except Exception:
-            # In case log widget isn't available yet, print to stdout
             print(f"[{timestamp}] {message}")
 
     def check_queue(self):
         try:
             while True:
                 message, tag = self.status_queue.get_nowait()
+                # Removed "progress" handling; logs drive all feedback now.
+
                 # Special case: a "complete" code separate from tag
                 if message == "complete" and tag == "complete":
-                    # stop indicators
-                    if hasattr(self, 'progress'):
-                        self.progress.stop()
                     self.is_processing = False
-                    # Re-enable buttons appropriately
                     self.update_status_label()
                     continue
 
                 self.log_message(message, tag)
 
                 if tag in ["complete", "error"]:
-                    # re-enable buttons
                     self.update_status_label()
-                    if hasattr(self, 'progress'):
-                        self.progress.stop()
                     self.is_processing = False
 
         except queue.Empty:
@@ -762,7 +657,6 @@ class ClinicalDataGUI:
             self.status_label.config(text="● CONNECTED", foreground=COLORS['success'])
             self.connect_btn.config(state=tk.DISABLED)
             self.disconnect_btn.config(state=tk.NORMAL)
-            # enable file actions if something selected
             sel = self.file_listbox.curselection()
             if sel:
                 self.validate_btn.config(state=tk.NORMAL)
@@ -783,41 +677,17 @@ class ClinicalDataGUI:
             self.validate_btn.config(state=tk.DISABLED)
             self.process_btn.config(state=tk.DISABLED)
 
-    # Connection workflows
-    
     def connect_to_server(self):
         if self.is_processing:
             return
-
-        # Clear log
         self.log_text.delete(1.0, tk.END)
         self.is_processing = True
-        self.progress.start()
-
         thread = threading.Thread(target=self._connect_and_load_files)
         thread.daemon = True
         thread.start()
 
     def _connect_and_load_files(self):
         try:
-            # If in test mode, we don't create an FTP processor. Instead, create a fake "processor" that holds path
-            if self.test_mode.get():
-                # Use download_dir as "server root" for test mode
-                server_root = self.download_dir.get()
-                # Create sample files in server root if empty for demo purposes
-                self._ensure_sample_files(server_root)
-                # Simulate file listing
-                files = [f.name for f in Path(server_root).iterdir() if f.is_file() and f.name.upper().endswith('.CSV')]
-                self.all_files = sorted(files)
-                self.processor = type("LocalFakeProcessor", (), {"connected": True, "ftp": None, "nlst": lambda self=None: self.all_files})()
-                self.status_queue.put(("✅ Test Mode: local file root ready", "success"))
-                self.root.after(0, self.update_file_listbox)
-                self.root.after(0, self.update_status_label)
-                self.status_queue.put(("🟢 Ready to validate/process files", "info"))
-                self.status_queue.put(("complete", "complete"))
-                return
-
-            # Real FTP
             self.processor = ClinicalDataProcessor(
                 self.ftp_host.get(),
                 self.ftp_user.get(),
@@ -826,60 +696,25 @@ class ClinicalDataGUI:
             )
             if self.processor.connect(self.status_queue):
                 self.all_files = self.processor.get_file_list(self.status_queue)
-                # update GUI list
                 self.root.after(0, self.update_file_listbox)
                 self.root.after(0, self.update_status_label)
                 self.status_queue.put(("✅ File list loaded successfully", "success"))
                 self.status_queue.put(("🟢 Ready to validate/process files", "info"))
             else:
                 self.status_queue.put(("❌ Failed to connect", "error"))
-
             self.status_queue.put(("complete", "complete"))
         except Exception as e:
             self.status_queue.put((f"🚨 Connection error: {e}", "error"))
             self.status_queue.put(("complete", "complete"))
 
-    def _ensure_sample_files(self, root_dir):
-        """Create a couple of sample CSV files for demonstration in test mode"""
-        root = Path(root_dir)
-        root.mkdir(parents=True, exist_ok=True)
-
-        # valid file
-        valid_name = "CLINICALDATA20250101120000.CSV"
-        valid_path = root / valid_name
-        if not valid_path.exists():
-            with open(valid_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(["PatientID", "TrialCode", "DrugCode", "Dosage_mg",
-                                 "StartDate", "EndDate", "Outcome", "SideEffects", "Analyst"])
-                writer.writerow(["P001", "TST01", "DRG1", "50", "2024-01-01", "2024-01-10", "Improved", "Nausea", "Alice"])
-                writer.writerow(["P002", "TST01", "DRG2", "75", "2024-02-01", "2024-02-12", "No Change", "Headache", "Bob"])
-
-        # invalid file
-        invalid_name = "CLINICALDATA20250101120100.CSV"
-        invalid_path = root / invalid_name
-        if not invalid_path.exists():
-            with open(invalid_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(["PatientID", "TrialCode", "DrugCode", "Dosage_mg",
-                                 "StartDate", "EndDate", "Outcome", "SideEffects", "Analyst"])
-                # missing fields and bad dosage and bad outcome
-                writer.writerow(["P003", "", "DRG3", "-10", "2024-03-05", "2024-03-01", "Better", "", "Carol"])
-                # wrong date format
-                writer.writerow(["P004", "TST02", "DRG4", "20", "03/05/2024", "2024-03-10", "Worsened", "Fatigue", "David"])
-
     def disconnect_from_server(self):
         if self.is_processing:
             return
-
         if not self.processor:
             messagebox.showwarning("Not Connected", "You are not connected to any server.")
             return
-
         self.log_text.delete(1.0, tk.END)
         self.is_processing = True
-        self.progress.start()
-
         thread = threading.Thread(target=self._disconnect_worker)
         thread.daemon = True
         thread.start()
@@ -887,15 +722,12 @@ class ClinicalDataGUI:
     def _disconnect_worker(self):
         try:
             if self.processor:
-                # For local fake processor just set to disconnected
-                if hasattr(self.processor, "connected"):
-                    try:
-                        # If it's real processor, call disconnect
-                        if isinstance(self.processor, ClinicalDataProcessor):
-                            self.processor.disconnect()
-                    except Exception:
-                        pass
-                    self.processor.connected = False
+                try:
+                    if isinstance(self.processor, ClinicalDataProcessor):
+                        self.processor.disconnect()
+                except Exception:
+                    pass
+                self.processor.connected = False
                 self.all_files = []
                 self.root.after(0, self.update_file_listbox)
                 self.root.after(0, self.update_status_label)
@@ -905,9 +737,6 @@ class ClinicalDataGUI:
             self.status_queue.put((f"🚨 Disconnect failed: {e}", "error"))
             self.status_queue.put(("complete", "complete"))
 
-    # -----------------------
-    # File list UI helpers
-    # -----------------------
     def update_file_listbox(self):
         self.file_listbox.delete(0, tk.END)
         self.displayed_files = list(self.all_files.copy())
@@ -929,31 +758,22 @@ class ClinicalDataGUI:
 
     def refresh_file_list(self):
         if not (self.processor and getattr(self.processor, "connected", False)):
-            messagebox.showwarning("Not Connected", "Please connect to the FTP server (or Test Mode) first.")
+            messagebox.showwarning("Not Connected", "Please connect to the FTP server first.")
             return
         if self.is_processing:
             return
-        # clear search and logs
         self.search_var.set("")
         self.log_text.delete(1.0, tk.END)
         self.is_processing = True
-        self.progress.start()
-
         thread = threading.Thread(target=self._refresh_files)
         thread.daemon = True
         thread.start()
 
     def _refresh_files(self):
         try:
-            if self.test_mode.get():
-                # re-read local directory
-                server_root = self.download_dir.get()
-                files = [f.name for f in Path(server_root).iterdir() if f.is_file() and f.name.upper().endswith('.CSV')]
-                self.all_files = sorted(files)
-            else:
-                if not self.processor.connected:
-                    self.processor.connect(self.status_queue)
-                self.all_files = self.processor.get_file_list(self.status_queue)
+            if not self.processor.connected:
+                self.processor.connect(self.status_queue)
+            self.all_files = self.processor.get_file_list(self.status_queue)
             self.root.after(0, self.update_file_listbox)
             self.status_queue.put(("✅ File list refreshed", "success"))
             self.status_queue.put(("complete", "complete"))
@@ -961,42 +781,35 @@ class ClinicalDataGUI:
             self.status_queue.put((f"🚨 Refresh failed: {e}", "error"))
             self.status_queue.put(("complete", "complete"))
 
-    # -----------------------
-    # Validation & Processing
-    # -----------------------
     def validate_selected(self):
         if self.is_processing:
             return
-
         selection = self.file_listbox.curselection()
         if not selection:
             messagebox.showwarning("No Selection", "Please select a file to validate.")
             return
-
         selected_file = self.displayed_files[selection[0]]
-
         self.log_text.delete(1.0, tk.END)
         self.is_processing = True
         self.validate_btn.config(state=tk.DISABLED, text="⏳ VALIDATING...")
         self.process_btn.config(state=tk.DISABLED)
-        self.progress.start()
-
         self.validator = ClinicalDataValidator(self.download_dir.get(), self.archive_dir.get(), self.error_dir.get())
-
         thread = threading.Thread(target=self._validate_selected_worker, args=([selected_file],))
         thread.daemon = True
         thread.start()
 
     def _validate_selected_worker(self, files):
         try:
-            if self.test_mode.get():
-                # ftp_obj is local root path string
-                ftp_obj = self.download_dir.get()
-            else:
-                if not self.processor.connected:
-                    self.processor.connect(self.status_queue)
-                ftp_obj = self.processor.ftp
-
+            if not self.processor or not getattr(self.processor, "connected", False):
+                if not self.processor:
+                    self.processor = ClinicalDataProcessor(
+                        self.ftp_host.get(),
+                        self.ftp_user.get(),
+                        self.ftp_pass.get(),
+                        self.remote_dir.get()
+                    )
+                self.processor.connect(self.status_queue)
+            ftp_obj = self.processor.ftp
             self.validator.validate_selected_files(ftp_obj, files, self.status_queue)
             self.status_queue.put(("complete", "complete"))
         except Exception as e:
@@ -1011,7 +824,6 @@ class ClinicalDataGUI:
             messagebox.showwarning("No Selection", "Please select a file to process.")
             return
         selected_file = self.displayed_files[selection[0]]
-
         confirm = messagebox.askyesno("Confirm Processing",
                                       f"Process file '{selected_file}'?\n\n"
                                       "✓ If valid, will be archived with date suffix\n"
@@ -1019,36 +831,33 @@ class ClinicalDataGUI:
                                       "⏭ Already processed files will be skipped")
         if not confirm:
             return
-
         self.log_text.delete(1.0, tk.END)
         self.is_processing = True
         self.validate_btn.config(state=tk.DISABLED)
         self.process_btn.config(state=tk.DISABLED, text="⏳ PROCESSING...")
-        self.progress.start()
-
         self.validator = ClinicalDataValidator(self.download_dir.get(), self.archive_dir.get(), self.error_dir.get())
-
         thread = threading.Thread(target=self._process_selected_worker, args=([selected_file],))
         thread.daemon = True
         thread.start()
 
     def _process_selected_worker(self, files):
         try:
-            if self.test_mode.get():
-                ftp_obj = self.download_dir.get()
-            else:
-                if not self.processor.connected:
-                    self.processor.connect(self.status_queue)
-                ftp_obj = self.processor.ftp
-
+            if not self.processor or not getattr(self.processor, "connected", False):
+                if not self.processor:
+                    self.processor = ClinicalDataProcessor(
+                        self.ftp_host.get(),
+                        self.ftp_user.get(),
+                        self.ftp_pass.get(),
+                        self.remote_dir.get()
+                    )
+                self.processor.connect(self.status_queue)
+            ftp_obj = self.processor.ftp
             self.validator.process_selected_files(ftp_obj, files, self.status_queue)
             self.status_queue.put(("complete", "complete"))
         except Exception as e:
             self.status_queue.put((f"🚨 Processing failed: {e}", "error"))
             self.status_queue.put(("complete", "complete"))
 
-    # Utility functions
-   
     def open_error_log(self):
         error_log_path = Path(self.error_dir.get()) / "error_report.log"
         if error_log_path.exists():
@@ -1067,13 +876,8 @@ class ClinicalDataGUI:
     def clear_log(self):
         self.log_text.delete(1.0, tk.END)
 
-# Unit tests (TDD demo)
-
 class ValidatorUnitTests(unittest.TestCase):
-    """Simple unit tests demonstrating TDD for the validator"""
-
     def setUp(self):
-        # create a temp directory
         self.tmpdir = Path(tempfile.mkdtemp(prefix="clinical_test_"))
         self.download = self.tmpdir / "down"
         self.archive = self.tmpdir / "arc"
@@ -1104,9 +908,7 @@ class ValidatorUnitTests(unittest.TestCase):
         self.assertEqual(count, 1)
 
     def test_invalid_header(self):
-        rows = [
-            ["Bad", "Header"],
-        ]
+        rows = [["Bad", "Header"],]
         path = self.create_csv("CLINICALDATA20250101120001.CSV", rows)
         ok, errors, count = self.validator._validate_csv_content(path, status_queue=None)
         self.assertFalse(ok)
@@ -1121,10 +923,7 @@ class ValidatorUnitTests(unittest.TestCase):
         path = self.create_csv("CLINICALDATA20250101120002.CSV", rows)
         ok, errors, count = self.validator._validate_csv_content(path, status_queue=None)
         self.assertFalse(ok)
-        # Expect at least one dosage error and date_range error
         self.assertTrue(any("Dosage" in e or "EndDate" in e or "Non-numeric dosage" in e for e in errors))
-
-# Main entry
 
 def main():
     parser = argparse.ArgumentParser(description="Clinical Data Processor (GUI)")
@@ -1134,7 +933,6 @@ def main():
         suite = unittest.TestLoader().loadTestsFromTestCase(ValidatorUnitTests)
         runner = unittest.TextTestRunner(verbosity=2)
         result = runner.run(suite)
-        # exit code
         sys.exit(0 if result.wasSuccessful() else 1)
     else:
         root = tk.Tk()

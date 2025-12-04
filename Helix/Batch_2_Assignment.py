@@ -44,7 +44,7 @@ class ClinicalDataProcessor:
             if status_queue:
                 status_queue.put(("✅ FTP connection successful", "success"))
                 status_queue.put((f"Current directory: {self.ftp.pwd()}", "info"))
-            
+
             return True
         except Exception as e:
             self.connected = False

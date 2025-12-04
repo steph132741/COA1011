@@ -124,7 +124,8 @@ class ClinicalDataProcessor:
 
         try:
             files = self.ftp.nlst()
-            csv_files = [f for f in files if f.upper().endswith('.CSV')]
+            pattern = re.compiler (r'.*\.*$')
+            csv_files = [f for f in files if pattern.match(f)]
             if status_queue and csv_files:
                 status_queue.put((f"Found {len(csv_files)} CSV files", "success"))
             elif status_queue:
