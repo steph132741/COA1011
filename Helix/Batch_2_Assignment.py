@@ -113,7 +113,7 @@ class ClinicalDataValidator:
         guid = self._generate_guid()
         log_entry = f"[{timestamp}] GUID: {guid} | File: {filename} | Error: {error_details}\n"
         
-        error_log_path = self.error_dir / "error_report.log"
+        error_log_path = self.error_dir / "error_report.log"  
         with open(error_log_path, "a") as f:
             f.write(log_entry)
         return guid, log_entry
