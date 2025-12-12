@@ -1,0 +1,1 @@
+PatientID,FirstName,LastName,DateOfBirth,Gender,DiagnosisCode,TreatmentDate,PhysicianID,HospitalID,TestResult,Medication,Dosage,InsuranceID,AdmissionDate,DischargeDate,Status

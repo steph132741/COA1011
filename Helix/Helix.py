@@ -8,6 +8,7 @@ import ftplib
 import csv
 import os
 import re
+import requests
 import uuid
 import shutil
 import argparse
@@ -119,8 +120,19 @@ class ClinicalDataValidator:
         self.processed_files.add(filename)
         self.processed_files_log.write_text("\n".join(sorted(self.processed_files)))
 
-    def _generate_guid(self):
-        return str(uuid.uuid4())
+        def _generate_guid(self):
+            """
+            Generate UUID version 4 from API.
+            """
+            try:
+                response = requests.get("https://www.uuidtools.com/api/generate/v4", timeout=5)
+                if response.status_code == 200:
+                    api_uuid = response.json()[0]
+                    return api_uuid
+                else:
+                    return str(uuid.uuid4())  # Local fallback
+            except Exception:
+                return str(uuid.uuid4())  # Local fallback
 
     def _log_error(self, filename, error_details):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
