@@ -120,11 +120,26 @@ class ClinicalDataValidator:
         self.processed_files.add(filename)
         self.processed_files_log.write_text("\n".join(sorted(self.processed_files)))
 
-        def generate_uuid_from_api():
+    def generate_uuid_from_api():
+        try:
             response = requests.get("https://www.uuidtools.com/api/generate/v4", timeout=5)
+            response.raise_for_status()
+            uuids = response.json()
+        
 
-            if response.status_code != 200:
-                raise ConnectionError(
+            if isinstance(uuid, list) and len(uuid) > 0:
+                return uuid[0]
+        except requests.exceptions.Timeout: 
+             pass
+        except requests. exceptions.ConnectionError: 
+            pass
+        except Exception as e: 
+            pass
+
+        return str(uuid.uuid4())
+
+        if response.status_code != 200:
+            raise ConnectionError(
                     f"API returned status code {response.status_code}"
                 )
 
